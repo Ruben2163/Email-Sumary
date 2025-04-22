@@ -27,7 +27,33 @@ labels = ['negative', 'neutral', 'positive']
 
 def analyze_sentiment(text):
     # Negative keywords for rule-based correction
-    negative_keywords = ['drop', 'plunge', 'crash', 'fall', 'decline', 'slump', 'lose', 'loss']
+    negative_keywords = ['drop', 'plunge', 'crash', 'fall', 'decline', 'slump', 'lose', 'loss',
+    "debt",
+    "bankruptcy",
+    "default",
+    "layoff",
+    "recession",
+    "collapse",
+    "crisis",
+    "downgrade",
+    "deficit",
+    "fraud",
+    "lawsuit",
+    "shortfall",
+    "volatility",
+    "instability",
+    "liabilities",
+    "inflation",
+    "stagnation",
+    "risk",
+    "exposure",
+    "write-down",
+    "impairment",
+    "insolvency",
+    "underperformance",
+    "bear market",
+    "sell-off",
+    "credit crunch"]
     
     inputs = tokenizer(text, return_tensors="pt", truncation=True)
     with torch.no_grad():
@@ -45,6 +71,7 @@ def analyze_sentiment(text):
                 confidence = 0.95  # Adjust confidence to reflect correction
                 break
 
+    print("sentiment analyze done")
     return sentiment, confidence
 
 # === FETCH NEWS ===
@@ -64,6 +91,7 @@ def get_finance_news():
                 "sentiment": sentiment,
                 "confidence": confidence
             })
+        print("retrived news")
         return results
     except Exception as e:
         print("Error fetching news:", e)
@@ -90,22 +118,7 @@ def get_stock_prices():
             changes.append(change)
         except Exception as e:
             print(f"Error fetching data for {ticker}: {e}")
-
-    # Generate heatmap
-    if prices:
-        df = pd.DataFrame({'Ticker': [p['ticker'] for p in prices], 'Change (%)': [p['change'] for p in prices]})
-        plt.figure(figsize=(4, len(TICKERS) * 0.5))
-        sns.heatmap(
-            df[['Change (%)']].set_index(df['Ticker']),
-            annot=True, fmt='.2f', cmap='RdYlGn',
-            cbar=False, center=0, linewidths=0.5,
-            yticklabels=True
-        )
-        plt.title('Stock Performance Heatmap')
-        plt.tight_layout()
-        plt.savefig('heatmap.png', dpi=100)
-        plt.close()
-
+    pint("get_stock_prices done")
     return prices
 
 # === BUILD EMAIL ===
@@ -247,14 +260,6 @@ def send_email(subject, html_body):
 
         part = MIMEText(html_body, "html")
         msg.attach(part)
-
-        # Attach heatmap image
-        if os.path.exists('heatmap.png'):
-            with open('heatmap.png', 'rb') as f:
-                img = MIMEImage(f.read())
-                img.add_header('Content-ID', '<heatmap>')
-                img.add_header('Content-Disposition', 'inline', filename='heatmap.png')
-                msg.attach(img)
 
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
         server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
