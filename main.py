@@ -104,14 +104,32 @@ def compose_html_report(news, stocks):
             <div class="divider"></div>
         </div>
         """
+    stocks_html = "<div style='display: flex; flex-wrap: wrap; gap: 10px;'>"
 
-    stocks_html = ""
     for s in stocks:
-        direction = "🔺" if s["change"] >= 0 else "🔻"
-        cls = "positive" if s["change"] >= 0 else "negative"
+        change = s["change"]
+        bg_color = "#27ae60" if change > 0 else "#c0392b" if change < 0 else "#f39c12"
+        change_str = f"+{change}%" if change > 0 else f"{change}%"
         stocks_html += f"""
-        <div class="stock-item">{s['ticker']}: ${s['price']} <span class='{cls}'>{direction} {s['change']}%</span></div>
+        <div style="
+            background-color: {bg_color};
+            color: white;
+            padding: 15px 10px;
+            min-width: 100px;
+            text-align: center;
+            font-weight: bold;
+            font-family: monospace;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        ">
+            {s['ticker']}<br>{change_str}
+        </div>
         """
+    
+    stocks_html += "</div>"
+
+
+
 
     now = datetime.now().strftime("%A, %d %B %Y")
     html = f"""
