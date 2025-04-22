@@ -28,7 +28,7 @@ def analyze_sentiment(text):
     probs = F.softmax(outputs.logits, dim=-1)
     sentiment = labels[torch.argmax(probs)]
     confidence = torch.max(probs).item()
-    return sentiment, confidence, probs
+    return sentiment, confidence, outputs
 
 # === FETCH NEWS ===
 def get_finance_news():
@@ -47,7 +47,7 @@ def get_finance_news():
                 "url": a['url'],
                 "sentiment": sentiment,
                 "confidence": confidence
-                "probs": probs
+                "probs": outputs
             })
         return results
     except Exception as e:
