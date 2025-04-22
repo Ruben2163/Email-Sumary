@@ -2,3 +2,6 @@ yfinance
 requests
 torch
 transformers
+seaborn 
+matplotlib
+pandas 

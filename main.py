@@ -4,10 +4,14 @@ import smtplib
 import yfinance as yf
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import torch.nn.functional as F
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
 
 # === ENVIRONMENT VARIABLES ===
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
@@ -22,12 +26,25 @@ model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 labels = ['negative', 'neutral', 'positive']
 
 def analyze_sentiment(text):
+    # Negative keywords for rule-based correction
+    negative_keywords = ['drop', 'plunge', 'crash', 'fall', 'decline', 'slump', 'lose', 'loss']
+    
     inputs = tokenizer(text, return_tensors="pt", truncation=True)
     with torch.no_grad():
         outputs = model(**inputs)
     probs = F.softmax(outputs.logits, dim=-1)
-    sentiment = labels[torch.argmax(probs)]
+    sentiment_idx = torch.argmax(probs)
+    sentiment = labels[sentiment_idx]
     confidence = torch.max(probs).item()
+
+    # Rule-based correction for negative headlines mislabeled as neutral
+    if sentiment == 'neutral' and confidence > 0.9:
+        for keyword in negative_keywords:
+            if keyword in text.lower():
+                sentiment = 'negative'
+                confidence = 0.95  # Adjust confidence to reflect correction
+                break
+
     return sentiment, confidence
 
 # === FETCH NEWS ===
@@ -52,9 +69,10 @@ def get_finance_news():
         print("Error fetching news:", e)
         return []
 
-# === FETCH STOCK PRICES ===
+# === FETCH STOCK PRICES AND GENERATE HEATMAP ===
 def get_stock_prices():
     prices = []
+    changes = []
     for ticker in TICKERS:
         try:
             stock = yf.Ticker(ticker)
@@ -69,13 +87,29 @@ def get_stock_prices():
                 "price": round(latest, 2),
                 "change": round(change, 2)
             })
+            changes.append(change)
         except Exception as e:
             print(f"Error fetching data for {ticker}: {e}")
+
+    # Generate heatmap
+    if prices:
+        df = pd.DataFrame({'Ticker': [p['ticker'] for p in prices], 'Change (%)': [p['change'] for p in prices]})
+        plt.figure(figsize=(4, len(TICKERS) * 0.5))
+        sns.heatmap(
+            df[['Change (%)']].set_index(df['Ticker']),
+            annot=True, fmt='.2f', cmap='RdYlGn',
+            cbar=False, center=0, linewidths=0.5,
+            yticklabels=True
+        )
+        plt.title('Stock Performance Heatmap')
+        plt.tight_layout()
+        plt.savefig('heatmap.png', dpi=100)
+        plt.close()
+
     return prices
 
 # === BUILD EMAIL ===
 def compose_html_report(news, stocks):
-    # Tailwind-inspired inline CSS for email compatibility
     styles = """
         <style>
             body {
@@ -141,6 +175,12 @@ def compose_html_report(news, stocks):
                 border-top: 1px solid #e5e7eb;
                 margin: 16px 0;
             }
+            .heatmap-img {
+                max-width: 100%;
+                height: auto;
+                margin-top: 16px;
+                display: block;
+            }
             @media only screen and (max-width: 600px) {
                 .container {
                     padding: 16px;
@@ -161,7 +201,7 @@ def compose_html_report(news, stocks):
     news_html = ""
     for n in news:
         emoji = {"positive": "📈", "neutral": "⚖️", "negative": "📉"}.get(n["sentiment"], "")
-        confidence_pct = round(n["confidence"] * 100, 1)  # Convert to percentage
+        confidence_pct = round(n["confidence"] * 100, 1)
         news_html += (
             f"<li>{emoji} <a href='{n['url']}'>{n['title']}</a> "
             f"<span class='{n['sentiment']}'>{n['sentiment'].capitalize()}</span>"
@@ -190,6 +230,8 @@ def compose_html_report(news, stocks):
             <div class="divider"></div>
             <h3>📊 Stock Price Snapshot</h3>
             <ul>{stocks_html}</ul>
+            <h3>📈 Performance Heatmap</h3>
+            <img src="cid:heatmap" class="heatmap-img" alt="Stock Performance Heatmap">
         </div>
     </body>
     </html>
@@ -202,8 +244,18 @@ def send_email(subject, html_body):
         msg["Subject"] = subject
         msg["From"] = EMAIL_ADDRESS
         msg["To"] = RECIPIENT_EMAIL
+
         part = MIMEText(html_body, "html")
         msg.attach(part)
+
+        # Attach heatmap image
+        if os.path.exists('heatmap.png'):
+            with open('heatmap.png', 'rb') as f:
+                img = MIMEImage(f.read())
+                img.add_header('Content-ID', '<heatmap>')
+                img.add_header('Content-Disposition', 'inline', filename='heatmap.png')
+                msg.attach(img)
+
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
         server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         server.sendmail(EMAIL_ADDRESS, RECIPIENT_EMAIL, msg.as_string())
