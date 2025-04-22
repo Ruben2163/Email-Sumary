@@ -1,4 +1,3 @@
-ssl
 yfinance
 requests
 email.message
