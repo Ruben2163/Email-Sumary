@@ -14,7 +14,7 @@ NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
-TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA").split(",")
+TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA,BTC-GBP,TSM,AMD,META,BRK-B").split(",")
 
 # === LOAD FINBERT ===
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
@@ -25,6 +25,7 @@ def analyze_sentiment(text):
     inputs = tokenizer(text, return_tensors="pt", truncation=True)
     with torch.no_grad():
         outputs = model(**inputs)
+        print(outputs)
     probs = F.softmax(outputs.logits, dim=-1)
     sentiment = labels[torch.argmax(probs)]
     confidence = torch.max(probs).item()
