@@ -2,9 +2,9 @@ import os
 import requests
 import smtplib
 import yfinance as yf
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import torch.nn.functional as F
@@ -16,7 +16,7 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
 TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA").split(",")
 
-# === LOAD FINBERT ===
+# === FINBERT SETUP ===
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 labels = ['negative', 'neutral', 'positive']
@@ -30,8 +30,7 @@ def analyze_sentiment(text):
     top_sentiment = max(result, key=result.get)
     return top_sentiment, result
 
-
-# === FETCH NEWS ===
+# === GET FINANCE NEWS ===
 def get_finance_news():
     try:
         url = f'https://newsapi.org/v2/top-headlines?category=business&language=en&apiKey={NEWS_API_KEY}'
@@ -40,7 +39,6 @@ def get_finance_news():
         articles = res.json().get("articles", [])[:5]
 
         results = []
-
         for a in articles:
             title = a['title']
             sentiment, probs = analyze_sentiment(title)
@@ -50,15 +48,12 @@ def get_finance_news():
                 "sentiment": sentiment,
                 "probabilities": probs
             })
-
-
-        
         return results
     except Exception as e:
         print("Error fetching news:", e)
         return []
 
-# === FETCH STOCK PRICES ===
+# === GET STOCK PRICES ===
 def get_stock_prices():
     prices = []
     for ticker in TICKERS:
@@ -79,45 +74,59 @@ def get_stock_prices():
             print(f"Error fetching data for {ticker}: {e}")
     return prices
 
-# === BUILD EMAIL ===
+# === FORMAT EMAIL HTML ===
 def compose_html_report(news, stocks):
     styles = """
-        body { font-family: Arial, sans-serif; background: #f8f9fa; padding: 20px; }
-        h2 { color: #333; }
-        li { margin-bottom: 10px; }
-        .positive { color: #2ecc71; font-weight: bold; }
-        .negative { color: #e74c3c; font-weight: bold; }
-        .neutral { color: #f39c12; font-weight: bold; }
+    body { font-family: Arial, sans-serif; background-color: #ffffff; padding: 20px; color: #333; }
+    h2, h3 { margin-top: 30px; color: #111; }
+    .section { margin-bottom: 40px; }
+    .headline { color: #000000; font-size: 16px; font-weight: bold; }
+    .sentiment-bar { font-size: 14px; margin-top: 4px; color: #666; }
+    .positive { color: #27ae60; }
+    .negative { color: #c0392b; }
+    .neutral { color: #f39c12; }
+    .stock-item { margin-bottom: 8px; font-size: 15px; }
+    .divider { border-top: 1px solid #ccc; margin: 20px 0; }
+    a { text-decoration: none; color: #000000; }
     """
 
     news_html = ""
     for n in news:
-        emoji = {"positive": "📈", "neutral": "⚖️", "negative": "📉"}.get(n["sentiment"], "")
-        news_html += (
-            f"<li>{emoji} <a href='{n['url']}'>{n['title']}</a> "
-            f"<span class='{n['sentiment']}'>{n['sentiment'].capitalize()}</span></li>"
-        )
+        p = n['probabilities']
+        news_html += f"""
+        <div class="section">
+            <div class="headline"><a href="{n['url']}">{n['title']}</a></div>
+            <div class="sentiment-bar">
+                📉 <span class='negative'>Negative: {p['negative']}%</span> |
+                ⚖️ <span class='neutral'>Neutral: {p['neutral']}%</span> |
+                📈 <span class='positive'>Positive: {p['positive']}%</span>
+            </div>
+            <div class="divider"></div>
+        </div>
+        """
 
     stocks_html = ""
     for s in stocks:
-        color = "positive" if s["change"] > 0 else "negative"
-        emoji = "🔼" if s["change"] > 0 else "🔽"
-        stocks_html += f"<li>{s['ticker']}: ${s['price']} <span class='{color}'>{emoji} {s['change']}%</span></li>"
+        direction = "🔺" if s["change"] >= 0 else "🔻"
+        cls = "positive" if s["change"] >= 0 else "negative"
+        stocks_html += f"""
+        <div class="stock-item">{s['ticker']}: ${s['price']} <span class='{cls}'>{direction} {s['change']}%</span></div>
+        """
 
     now = datetime.now().strftime("%A, %d %B %Y")
-
-    return f"""
+    html = f"""
     <html>
     <head><style>{styles}</style></head>
     <body>
         <h2>📬 Morning Market Brief – {now}</h2>
         <h3>📰 Top Finance Headlines</h3>
-        <ul>{news_html}</ul>
-        <h3>📊 Stock Price Snapshot</h3>
-        <ul>{stocks_html}</ul>
+        {news_html}
+        <h3>📊 Stock Price Summary</h3>
+        {stocks_html}
     </body>
     </html>
     """
+    return html
 
 # === SEND EMAIL ===
 def send_email(subject, html_body):
@@ -130,15 +139,15 @@ def send_email(subject, html_body):
         part = MIMEText(html_body, "html")
         msg.attach(part)
 
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_ADDRESS, RECIPIENT_EMAIL, msg.as_string())
-        server.quit()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_ADDRESS, RECIPIENT_EMAIL, msg.as_string())
+
         print("✅ Email sent successfully!")
     except Exception as e:
         print("Error sending email:", e)
 
-# === MAIN ===
+# === MAIN RUN ===
 if __name__ == "__main__":
     news = get_finance_news()
     stocks = get_stock_prices()
