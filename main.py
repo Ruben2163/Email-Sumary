@@ -25,7 +25,6 @@ def analyze_sentiment(text):
     inputs = tokenizer(text, return_tensors="pt", truncation=True)
     with torch.no_grad():
         outputs = model(**inputs)
-        print(outputs)
     probs = F.softmax(outputs.logits, dim=-1)
     sentiment = labels[torch.argmax(probs)]
     confidence = torch.max(probs).item()
@@ -38,7 +37,6 @@ def get_finance_news():
         res = requests.get(url)
         res.raise_for_status()
         articles = res.json().get("articles", [])[:5]
-
         results = []
         for a in articles:
             title = a['title']
@@ -77,40 +75,122 @@ def get_stock_prices():
 
 # === BUILD EMAIL ===
 def compose_html_report(news, stocks):
+    # Tailwind-inspired inline CSS for email compatibility
     styles = """
-        body { font-family: Arial, sans-serif; background: #f8f9fa; padding: 20px; }
-        h2 { color: #333; }
-        li { margin-bottom: 10px; }
-        .positive { color: #2ecc71; font-weight: bold; }
-        .negative { color: #e74c3c; font-weight: bold; }
-        .neutral { color: #f39c12; font-weight: bold; }
+        <style>
+            body {
+                font-family: Helvetica, Arial, sans-serif;
+                background-color: #f9fafb;
+                padding: 20px;
+                margin: 0;
+                color: #1f2937;
+            }
+            .container {
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                padding: 24px;
+            }
+            h2 {
+                color: #111827;
+                font-size: 24px;
+                margin-bottom: 16px;
+                text-align: center;
+            }
+            h3 {
+                color: #374151;
+                font-size: 18px;
+                margin: 16px 0 8px;
+            }
+            ul {
+                list-style: none;
+                padding: 0;
+            }
+            li {
+                margin-bottom: 12px;
+                font-size: 16px;
+                line-height: 1.5;
+            }
+            a {
+                color: #2563eb;
+                text-decoration: none;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+            .positive {
+                color: #16a34a;
+                font-weight: 600;
+            }
+            .negative {
+                color: #dc2626;
+                font-weight: 600;
+            }
+            .neutral {
+                color: #d97706;
+                font-weight: 600;
+            }
+            .confidence {
+                font-size: 14px;
+                color: #6b7280;
+                margin-left: 8px;
+            }
+            .divider {
+                border-top: 1px solid #e5e7eb;
+                margin: 16px 0;
+            }
+            @media only screen and (max-width: 600px) {
+                .container {
+                    padding: 16px;
+                }
+                h2 {
+                    font-size: 20px;
+                }
+                h3 {
+                    font-size: 16px;
+                }
+                li {
+                    font-size: 14px;
+                }
+            }
+        </style>
     """
 
     news_html = ""
     for n in news:
         emoji = {"positive": "📈", "neutral": "⚖️", "negative": "📉"}.get(n["sentiment"], "")
+        confidence_pct = round(n["confidence"] * 100, 1)  # Convert to percentage
         news_html += (
             f"<li>{emoji} <a href='{n['url']}'>{n['title']}</a> "
-            f"<span class='{n['sentiment']}'>{n['sentiment'].capitalize()}</span></li>"
+            f"<span class='{n['sentiment']}'>{n['sentiment'].capitalize()}</span>"
+            f"<span class='confidence'>({confidence_pct}%)</span></li>"
         )
 
     stocks_html = ""
     for s in stocks:
         color = "positive" if s["change"] > 0 else "negative"
         emoji = "🔼" if s["change"] > 0 else "🔽"
-        stocks_html += f"<li>{s['ticker']}: ${s['price']} <span class='{color}'>{emoji} {s['change']}%</span></li>"
+        stocks_html += (
+            f"<li>{s['ticker']}: ${s['price']} "
+            f"<span class='{color}'>{emoji} {s['change']}%</span></li>"
+        )
 
     now = datetime.now().strftime("%A, %d %B %Y")
 
     return f"""
     <html>
-    <head><style>{styles}</style></head>
+    <head>{styles}</head>
     <body>
-        <h2>📬 Morning Market Brief – {now}</h2>
-        <h3>📰 Top Finance Headlines</h3>
-        <ul>{news_html}</ul>
-        <h3>📊 Stock Price Snapshot</h3>
-        <ul>{stocks_html}</ul>
+        <div class="container">
+            <h2>📬 Morning Market Brief – {now}</h2>
+            <h3>📰 Top Finance Headlines</h3>
+            <ul>{news_html}</ul>
+            <div class="divider"></div>
+            <h3>📊 Stock Price Snapshot</h3>
+            <ul>{stocks_html}</ul>
+        </div>
     </body>
     </html>
     """
@@ -122,10 +202,8 @@ def send_email(subject, html_body):
         msg["Subject"] = subject
         msg["From"] = EMAIL_ADDRESS
         msg["To"] = RECIPIENT_EMAIL
-
         part = MIMEText(html_body, "html")
         msg.attach(part)
-
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
         server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         server.sendmail(EMAIL_ADDRESS, RECIPIENT_EMAIL, msg.as_string())
