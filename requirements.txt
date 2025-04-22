@@ -1,6 +1,4 @@
 yfinance
 requests
-email.message
 transformers
 torch
-torch.nn.functional 
