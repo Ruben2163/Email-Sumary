@@ -160,7 +160,7 @@ def compose_html_report(news, stocks):
 # === SEND EMAIL ===
 def send_email(body_text, body_html):
     msg = EmailMessage()
-    msg['Subject'] = 'Your Daily Finance Briefing'
+    msg['Subject'] = '📰 Daily Finance Briefing: Headlines & Markets'
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = RECIPIENT_EMAIL
     msg.set_content(body_text)
