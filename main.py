@@ -1,14 +1,22 @@
 import os
-import smtplib
-import ssl
-import yfinance as yf
 import requests
-from email.message import EmailMessage
+import smtplib
+import yfinance as yf
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import torch.nn.functional as F
 
-# === FINBERT SETUP ===
+# === ENVIRONMENT VARIABLES ===
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
+TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA").split(",")
+
+# === LOAD FINBERT ===
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 labels = ['negative', 'neutral', 'positive']
@@ -22,204 +30,112 @@ def analyze_sentiment(text):
     confidence = torch.max(probs).item()
     return sentiment, confidence
 
-
-# === CONFIG ===
-NEWS_API_KEY = os.environ['NEWS_API_KEY']
-STOCKS = ['AAPL', 'TSLA', '^GSPC', 'NVDA', '']
-EMAIL_ADDRESS = os.environ['EMAIL_ADDRESS']
-EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
-RECIPIENT_EMAIL = os.environ['RECIPIENT_EMAIL']
-
 # === FETCH NEWS ===
 def get_finance_news():
-    url = f'https://newsapi.org/v2/top-headlines?category=business&language=en&apiKey={NEWS_API_KEY}'
-    res = requests.get(url)
-    articles = res.json().get("articles", [])[:5]
+    try:
+        url = f'https://newsapi.org/v2/top-headlines?category=business&language=en&apiKey={NEWS_API_KEY}'
+        res = requests.get(url)
+        res.raise_for_status()
+        articles = res.json().get("articles", [])[:5]
 
-    results = []
-    for a in articles:
-        title = a['title']
-        sentiment, confidence = analyze_sentiment(title)
-        results.append({
-            "title": title,
-            "url": a['url'],
-            "sentiment": sentiment,
-            "confidence": confidence
-        })
-    return results
-
-# === FETCH STOCK PRICES + CHANGES ===
-def get_stock_prices():
-    results = []
-    for symbol in STOCKS:
-        stock = yf.Ticker(symbol)
-        data = stock.history(period='2d')  # Need 2 days to calculate change
-        if len(data) >= 2:
-            latest = data['Close'].iloc[-1]
-            previous = data['Close'].iloc[-2]
-            change = latest - previous
-            percent = (change / previous) * 100
+        results = []
+        for a in articles:
+            title = a['title']
+            sentiment, confidence = analyze_sentiment(title)
             results.append({
-                "symbol": symbol,
-                "price": latest,
-                "change": change,
-                "percent": percent
+                "title": title,
+                "url": a['url'],
+                "sentiment": sentiment,
+                "confidence": confidence
             })
-    return results
+        return results
+    except Exception as e:
+        print("Error fetching news:", e)
+        return []
 
-# === COMPOSE PLAIN TEXT REPORT (fallback) ===
-def compose_plain_report(news, stocks):
-    news_section = "\n".join(f"- {n['title']}" for n in news)
-    stock_section = "\n".join(
-        f"{s['symbol']}: ${s['price']:.2f} ({s['percent']:+.2f}%)"
-        for s in stocks
-    )
-    return f"""
-Here is your daily financial briefing:
+# === FETCH STOCK PRICES ===
+def get_stock_prices():
+    prices = []
+    for ticker in TICKERS:
+        try:
+            stock = yf.Ticker(ticker)
+            data = stock.history(period='2d')
+            if len(data) < 2:
+                continue
+            latest = data.iloc[-1]['Close']
+            previous = data.iloc[-2]['Close']
+            change = ((latest - previous) / previous) * 100
+            prices.append({
+                "ticker": ticker,
+                "price": round(latest, 2),
+                "change": round(change, 2)
+            })
+        except Exception as e:
+            print(f"Error fetching data for {ticker}: {e}")
+    return prices
 
---- Headlines ---
-{news_section}
-
---- Stock Prices ---
-{stock_section}
-"""
-
-# === COMPOSE HTML REPORT (styled) ===
+# === BUILD EMAIL ===
 def compose_html_report(news, stocks):
-    
+    styles = """
+        body { font-family: Arial, sans-serif; background: #f8f9fa; padding: 20px; }
+        h2 { color: #333; }
+        li { margin-bottom: 10px; }
+        .positive { color: #2ecc71; font-weight: bold; }
+        .negative { color: #e74c3c; font-weight: bold; }
+        .neutral { color: #f39c12; font-weight: bold; }
+    """
 
     news_html = ""
     for n in news:
-        color = {
-            "positive": "#2ecc71",
-            "neutral": "#f39c12",
-            "negative": "#e74c3c"
-        }[n["sentiment"]]
-        emoji = {
-            "positive": "📈",
-            "neutral": "⚖️",
-            "negative": "📉"
-        }[n["sentiment"]]
+        emoji = {"positive": "📈", "neutral": "⚖️", "negative": "📉"}.get(n["sentiment"], "")
         news_html += (
-            f"<li>{emoji} <a href='{n['url']}' target='_blank'>{n['title']}</a> "
-            f"<span style='color:{color}; font-weight:500;'>({n['sentiment'].capitalize()})</span></li>"
+            f"<li>{emoji} <a href='{n['url']}'>{n['title']}</a> "
+            f"<span class='{n['sentiment']}'>{n['sentiment'].capitalize()}</span></li>"
         )
 
-
-    stock_html = ""
+    stocks_html = ""
     for s in stocks:
-        color = "#2ecc71" if s["change"] >= 0 else "#e74c3c"
-        emoji = "📈" if s["change"] >= 0 else "📉"
-        stock_html += (
-            f"<li><span class='symbol'>{emoji} {s['symbol']}</span>: "
-            f"<span class='price'>${s['price']:.2f}</span> "
-            f"<span class='percent' style='color:{color};'>({s['percent']:+.2f}%)</span></li>"
-        )
+        color = "positive" if s["change"] > 0 else "negative"
+        emoji = "🔼" if s["change"] > 0 else "🔽"
+        stocks_html += f"<li>{s['ticker']}: ${s['price']} <span class='{color}'>{emoji} {s['change']}%</span></li>"
 
-    html = f"""
+    now = datetime.now().strftime("%A, %d %B %Y")
+
+    return f"""
     <html>
-      <head>
-        <style>
-          body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #ffffff;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-          }}
-
-          @media (prefers-color-scheme: dark) {{
-            body {{
-              background-color: #1e1e1e;
-              color: #ccc;
-            }}
-            a {{ color: #4ea3ff; }}
-          }}
-
-          h2 {{
-            font-size: 24px;
-            margin-bottom: 10px;
-            color: #111;
-          }}
-
-          h3 {{
-            font-size: 18px;
-            margin-top: 30px;
-            margin-bottom: 10px;
-            color: #222;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 4px;
-          }}
-
-          ul {{
-            padding-left: 20px;
-            line-height: 1.6;
-          }}
-
-          a {{
-            color: #1a73e8;
-            text-decoration: none;
-          }}
-
-          a:hover {{
-            text-decoration: underline;
-          }}
-
-          .symbol {{
-            font-weight: bold;
-          }}
-
-          .price {{
-            color: #333;
-          }}
-
-          .footer {{
-            font-size: 12px;
-            color: #999;
-            margin-top: 30px;
-            border-top: 1px solid #eee;
-            padding-top: 10px;
-          }}
-        </style>
-      </head>
-      <body>
-        <h2>Good Morning!</h2>
-        <p>Here’s your <strong>daily finance briefing</strong>:</p>
-
-        <h3>Top Headlines</h3>
+    <head><style>{styles}</style></head>
+    <body>
+        <h2>📬 Morning Market Brief – {now}</h2>
+        <h3>📰 Top Finance Headlines</h3>
         <ul>{news_html}</ul>
-
-        <h3>Stock Prices</h3>
-        <ul>{stock_html}</ul>
-
-        <div class="footer">
-          Sent by your finance bot. Powered by NewsAPI & Yahoo Finance.
-        </div>
-      </body>
+        <h3>📊 Stock Price Snapshot</h3>
+        <ul>{stocks_html}</ul>
+    </body>
     </html>
     """
-    return html
 
 # === SEND EMAIL ===
-def send_email(body_text, body_html):
-    msg = EmailMessage()
-    msg['Subject'] = '📰 Daily Finance Briefing: Headlines & Markets'
-    msg['From'] = EMAIL_ADDRESS
-    msg['To'] = RECIPIENT_EMAIL
-    msg.set_content(body_text)
-    msg.add_alternative(body_html, subtype='html')
+def send_email(subject, html_body):
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_ADDRESS
+        msg["To"] = RECIPIENT_EMAIL
 
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as smtp:
-        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        smtp.send_message(msg)
+        part = MIMEText(html_body, "html")
+        msg.attach(part)
+
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_ADDRESS, RECIPIENT_EMAIL, msg.as_string())
+        server.quit()
+        print("✅ Email sent successfully!")
+    except Exception as e:
+        print("Error sending email:", e)
 
 # === MAIN ===
 if __name__ == "__main__":
     news = get_finance_news()
     stocks = get_stock_prices()
-
-    plain = compose_plain_report(news, stocks)
     html = compose_html_report(news, stocks)
-
-    send_email(plain, html)
+    send_email("📈 Your Morning Market Brief", html)
