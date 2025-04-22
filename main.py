@@ -46,12 +46,13 @@ Here is your daily finance briefing:
 """
 
 # === SEND EMAIL ===
-def send_email(body):
+def send_email(body_text, body_html):
     msg = EmailMessage()
     msg['Subject'] = 'Your Daily Finance Briefing'
     msg['From'] = EMAIL_ADDRESS
     msg['To'] = RECIPIENT_EMAIL
-    msg.set_content(body)
+    msg.set_content(body_text)         # Fallback plain-text
+    msg.add_alternative(body_html, subtype='html')  # HTML version
 
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as smtp:
