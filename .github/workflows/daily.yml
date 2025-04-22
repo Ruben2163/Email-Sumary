@@ -2,7 +2,7 @@ name: Daily Finance Briefing
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # Runs at 6:00 UTC (7:00 UK time)
+    - cron: '0 5 * * *'  # Runs at 5:00 UTC (6:00 UK time)
   workflow_dispatch:
 
 jobs:
