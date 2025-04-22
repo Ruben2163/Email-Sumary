@@ -25,10 +25,11 @@ def analyze_sentiment(text):
     inputs = tokenizer(text, return_tensors="pt", truncation=True)
     with torch.no_grad():
         outputs = model(**inputs)
-    probs = F.softmax(outputs.logits, dim=-1)
-    sentiment = labels[torch.argmax(probs)]
-    confidence = torch.max(probs).item()
-    return sentiment, confidence, outputs
+    probs = F.softmax(outputs.logits, dim=-1).squeeze().tolist()
+    result = {label: round(prob * 100, 2) for label, prob in zip(labels, probs)}
+    top_sentiment = max(result, key=result.get)
+    return top_sentiment, result
+
 
 # === FETCH NEWS ===
 def get_finance_news():
@@ -39,16 +40,19 @@ def get_finance_news():
         articles = res.json().get("articles", [])[:5]
 
         results = []
+
         for a in articles:
             title = a['title']
-            sentiment, confidence = analyze_sentiment(title)
+            sentiment, probs = analyze_sentiment(title)
             results.append({
                 "title": title,
                 "url": a['url'],
                 "sentiment": sentiment,
-                "confidence": confidence
-                "probs": outputs
+                "probabilities": probs
             })
+
+
+        
         return results
     except Exception as e:
         print("Error fetching news:", e)
