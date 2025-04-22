@@ -4,10 +4,28 @@ import ssl
 import yfinance as yf
 import requests
 from email.message import EmailMessage
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
+import torch.nn.functional as F
+
+# === FINBERT SETUP ===
+tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+labels = ['negative', 'neutral', 'positive']
+
+def analyze_sentiment(text):
+    inputs = tokenizer(text, return_tensors="pt", truncation=True)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    probs = F.softmax(outputs.logits, dim=-1)
+    sentiment = labels[torch.argmax(probs)]
+    confidence = torch.max(probs).item()
+    return sentiment, confidence
+
 
 # === CONFIG ===
 NEWS_API_KEY = os.environ['NEWS_API_KEY']
-STOCKS = ['AAPL', 'TSLA', '^GSPC']
+STOCKS = ['AAPL', 'TSLA', '^GSPC', 'NVDA', '']
 EMAIL_ADDRESS = os.environ['EMAIL_ADDRESS']
 EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
 RECIPIENT_EMAIL = os.environ['RECIPIENT_EMAIL']
@@ -16,8 +34,19 @@ RECIPIENT_EMAIL = os.environ['RECIPIENT_EMAIL']
 def get_finance_news():
     url = f'https://newsapi.org/v2/top-headlines?category=business&language=en&apiKey={NEWS_API_KEY}'
     res = requests.get(url)
-    articles = res.json().get("articles", [])
-    return [{"title": a['title'], "url": a['url']} for a in articles[:5]]
+    articles = res.json().get("articles", [])[:5]
+
+    results = []
+    for a in articles:
+        title = a['title']
+        sentiment, confidence = analyze_sentiment(title)
+        results.append({
+            "title": title,
+            "url": a['url'],
+            "sentiment": sentiment,
+            "confidence": confidence
+        })
+    return results
 
 # === FETCH STOCK PRICES + CHANGES ===
 def get_stock_prices():
@@ -45,8 +74,7 @@ def compose_plain_report(news, stocks):
         f"{s['symbol']}: ${s['price']:.2f} ({s['percent']:+.2f}%)"
         for s in stocks
     )
-    return f"""Good morning!
-
+    return f"""
 Here is your daily financial briefing:
 
 --- Headlines ---
@@ -58,10 +86,25 @@ Here is your daily financial briefing:
 
 # === COMPOSE HTML REPORT (styled) ===
 def compose_html_report(news, stocks):
-    news_html = "".join(
-        f"<li><a href='{n['url']}' target='_blank'>{n['title']}</a></li>"
-        for n in news
-    )
+    
+
+    news_html = ""
+    for n in news:
+        color = {
+            "positive": "#2ecc71",
+            "neutral": "#f39c12",
+            "negative": "#e74c3c"
+        }[n["sentiment"]]
+        emoji = {
+            "positive": "📈",
+            "neutral": "⚖️",
+            "negative": "📉"
+        }[n["sentiment"]]
+        news_html += (
+            f"<li>{emoji} <a href='{n['url']}' target='_blank'>{n['title']}</a> "
+            f"<span style='color:{color}; font-weight:500;'>({n['sentiment'].capitalize()})</span></li>"
+        )
+
 
     stock_html = ""
     for s in stocks:
