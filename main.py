@@ -1,112 +1,142 @@
-import yfinance as yf
+import os
 import requests
 import smtplib
+import yfinance as yf
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
-import datetime
+import torch.nn.functional as F
 
-# --- Config ---
-NEWS_API_KEY = 'YOUR_NEWSAPI_KEY'
-EMAIL_ADDRESS = 'your_email@gmail.com'
-EMAIL_PASSWORD = 'your_app_password'
-RECIPIENT_EMAIL = 'your_email@gmail.com'
-STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN']
-EMERGING_WATCHLIST = ['PLTR', 'UPST', 'SOFI', 'DNA', 'IONQ']
-NUM_ARTICLES = 5
+# === ENVIRONMENT VARIABLES ===
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
+TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA").split(",")
 
-# --- Load FinBERT ---
-tokenizer = AutoTokenizer.from_pretrained("yiyanghkust/finbert-tone")
-model = AutoModelForSequenceClassification.from_pretrained("yiyanghkust/finbert-tone")
-labels = ['neutral', 'positive', 'negative']
+# === LOAD FINBERT ===
+tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+labels = ['negative', 'neutral', 'positive']
 
-def get_sentiment(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-    outputs = model(**inputs)
-    probs = torch.nn.functional.softmax(outputs.logits, dim=-1).detach().numpy()[0]
-    return {label: round(float(prob), 2) for label, prob in zip(labels, probs)}
+def analyze_sentiment(text):
+    inputs = tokenizer(text, return_tensors="pt", truncation=True)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    probs = F.softmax(outputs.logits, dim=-1)
+    sentiment = labels[torch.argmax(probs)]
+    confidence = torch.max(probs).item()
+    return sentiment, confidence, outputs
 
-def get_news():
-    url = f"https://newsapi.org/v2/top-headlines?category=business&language=en&pageSize={NUM_ARTICLES}&apiKey={NEWS_API_KEY}"
-    response = requests.get(url)
-    return response.json().get("articles", [])
+# === FETCH NEWS ===
+def get_finance_news():
+    try:
+        url = f'https://newsapi.org/v2/top-headlines?category=business&language=en&apiKey={NEWS_API_KEY}'
+        res = requests.get(url)
+        res.raise_for_status()
+        articles = res.json().get("articles", [])[:5]
 
-def get_stock_data(tickers):
-    results = []
-    for ticker in tickers:
+        results = []
+        for a in articles:
+            title = a['title']
+            sentiment, confidence = analyze_sentiment(title)
+            results.append({
+                "title": title,
+                "url": a['url'],
+                "sentiment": sentiment,
+                "confidence": confidence
+                "probs": outputs
+            })
+        return results
+    except Exception as e:
+        print("Error fetching news:", e)
+        return []
+
+# === FETCH STOCK PRICES ===
+def get_stock_prices():
+    prices = []
+    for ticker in TICKERS:
         try:
             stock = yf.Ticker(ticker)
-            hist = stock.history(period="2d")
-            if len(hist) >= 2:
-                change = round(((hist["Close"].iloc[-1] - hist["Close"].iloc[-2]) / hist["Close"].iloc[-2]) * 100, 2)
-                results.append({"ticker": ticker, "change": change})
-        except:
-            continue
-    return results
+            data = stock.history(period='2d')
+            if len(data) < 2:
+                continue
+            latest = data.iloc[-1]['Close']
+            previous = data.iloc[-2]['Close']
+            change = ((latest - previous) / previous) * 100
+            prices.append({
+                "ticker": ticker,
+                "price": round(latest, 2),
+                "change": round(change, 2)
+            })
+        except Exception as e:
+            print(f"Error fetching data for {ticker}: {e}")
+    return prices
 
-def get_emerging_stocks():
-    return [s for s in get_stock_data(EMERGING_WATCHLIST) if s["change"] >= 5]
+# === BUILD EMAIL ===
+def compose_html_report(news, stocks):
+    styles = """
+        body { font-family: Arial, sans-serif; background: #f8f9fa; padding: 20px; }
+        h2 { color: #333; }
+        li { margin-bottom: 10px; }
+        .positive { color: #2ecc71; font-weight: bold; }
+        .negative { color: #e74c3c; font-weight: bold; }
+        .neutral { color: #f39c12; font-weight: bold; }
+    """
 
-def compose_html_report(news, stocks, emerging):
-    html = f"<h1 style='font-family:sans-serif;'>📊 Morning Brief - {datetime.date.today()}</h1>"
+    news_html = ""
+    for n in news:
+        emoji = {"positive": "📈", "neutral": "⚖️", "negative": "📉"}.get(n["sentiment"], "")
+        news_html += (
+            f"<li>{emoji} <a href='{n['url']}'>{n['title']}</a> "
+            f"<span class='{n['sentiment']}'>{n['sentiment'].capitalize()}</span></li>"
+        )
 
-    html += "<h2>📰 Top Headlines</h2>"
-    for article in news:
-        sentiment = get_sentiment(article["title"])
-        sentiment_str = " | ".join([f"{k.capitalize()}: {v:.2f}" for k, v in sentiment.items()])
-        html += f"""
-            <div style='margin-bottom:15px;'>
-                <p style='margin:0; font-size:16px; color:#000; font-weight:500;'>{article['title']}</p>
-                <small style='color:#666;'>{sentiment_str}</small>
-            </div>
-        """
-
-    html += "<h2>📈 Stock Overview</h2><div style='display: flex; flex-wrap: wrap; gap: 10px;'>"
+    stocks_html = ""
     for s in stocks:
-        bg = "#2ecc71" if s["change"] > 0 else "#e74c3c" if s["change"] < 0 else "#f39c12"
-        html += f"""
-        <div style='background:{bg};color:white;padding:15px 10px;min-width:100px;
-        text-align:center;font-weight:bold;font-family:monospace;border-radius:8px;
-        box-shadow:0 1px 3px rgba(0,0,0,0.1);'>
-            {s['ticker']}<br>{s['change']}%
-        </div>
-        """
-    html += "</div>"
+        color = "positive" if s["change"] > 0 else "negative"
+        emoji = "🔼" if s["change"] > 0 else "🔽"
+        stocks_html += f"<li>{s['ticker']}: ${s['price']} <span class='{color}'>{emoji} {s['change']}%</span></li>"
 
-    html += "<h2>🚀 Emerging Stocks</h2>"
-    if emerging:
-        html += "<div style='display: flex; flex-wrap: wrap; gap: 10px;'>"
-        for s in emerging:
-            html += f"""
-            <div style='background:#8e44ad;color:white;padding:15px 10px;min-width:100px;
-            text-align:center;font-weight:bold;font-family:monospace;border-radius:8px;
-            box-shadow:0 1px 3px rgba(0,0,0,0.1);'>
-                {s['ticker']}<br>+{s['change']}%
-            </div>
-            """
-        html += "</div>"
-    else:
-        html += "<p>No major emerging stock moves today.</p>"
+    now = datetime.now().strftime("%A, %d %B %Y")
 
-    return html
+    return f"""
+    <html>
+    <head><style>{styles}</style></head>
+    <body>
+        <h2>📬 Morning Market Brief – {now}</h2>
+        <h3>📰 Top Finance Headlines</h3>
+        <ul>{news_html}</ul>
+        <h3>📊 Stock Price Snapshot</h3>
+        <ul>{stocks_html}</ul>
+    </body>
+    </html>
+    """
 
-def send_email(subject, html_content):
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
-    msg['From'] = EMAIL_ADDRESS
-    msg['To'] = RECIPIENT_EMAIL
+# === SEND EMAIL ===
+def send_email(subject, html_body):
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_ADDRESS
+        msg["To"] = RECIPIENT_EMAIL
 
-    msg.attach(MIMEText(html_content, 'html'))
+        part = MIMEText(html_body, "html")
+        msg.attach(part)
 
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        smtp.send_message(msg)
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_ADDRESS, RECIPIENT_EMAIL, msg.as_string())
+        server.quit()
+        print("✅ Email sent successfully!")
+    except Exception as e:
+        print("Error sending email:", e)
 
-# --- Main ---
+# === MAIN ===
 if __name__ == "__main__":
-    news = get_news()
-    stocks = get_stock_data(STOCKS)
-    emerging = get_emerging_stocks()
-    html = compose_html_report(news, stocks, emerging)
-    send_email("🗞️ Your Daily Market Brief", html)
+    news = get_finance_news()
+    stocks = get_stock_prices()
+    html = compose_html_report(news, stocks)
+    send_email("📈 Your Morning Market Brief", html)
