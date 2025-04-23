@@ -118,7 +118,7 @@ def get_stock_prices():
             changes.append(change)
         except Exception as e:
             print(f"Error fetching data for {ticker}: {e}")
-    pint("get_stock_prices done")
+    print("get_stock_prices done")
     return prices
 
 # === BUILD EMAIL ===
