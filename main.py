@@ -123,7 +123,11 @@ def get_stock_prices():
 
 # === BUILD EMAIL ===
 def compose_html_report(news, stocks):
-        return f"""
+    # Format today's date
+    now = datetime.now().strftime("%A, %d %B %Y")
+
+    # Return the full HTML email
+    return f"""
     <html>
     <head>
         <style>
@@ -197,27 +201,34 @@ def compose_html_report(news, stocks):
                 color: #6b7280;
                 margin-left: 6px;
             }}
+            .divider {{
+                border-top: 1px solid #e5e7eb;
+                margin: 24px 0;
+            }}
             .footer {{
                 text-align: center;
-                font-size: 12px;
-                color: #9ca3af;
-                padding: 16px;
-                background-color: #f9fafb;
+                font-size: 14px;
+                color: #6b7280;
+                padding: 16px 24px;
             }}
-            .heatmap-img {{
-                display: block;
-                max-width: 100%;
-                height: auto;
-                margin-top: 16px;
-                border-radius: 8px;
+            .cta-link {{
+                color: #2563eb;
+                font-weight: 500;
+                text-decoration: none;
+            }}
+            .cta-link:hover {{
+                text-decoration: underline;
             }}
         </style>
     </head>
     <body>
         <div class="container">
+            <!-- Header -->
             <div class="header">
                 <h1>📬 Morning Market Brief – {now}</h1>
             </div>
+
+            <!-- Top Headlines -->
             <div class="section">
                 <h2>📰 Top Finance Headlines</h2>
                 <ul>
@@ -230,6 +241,8 @@ def compose_html_report(news, stocks):
                     )}
                 </ul>
             </div>
+
+            <!-- Stock Snapshot -->
             <div class="section">
                 <h2>📊 Stock Price Snapshot</h2>
                 <ul>
@@ -241,17 +254,21 @@ def compose_html_report(news, stocks):
                     )}
                 </ul>
             </div>
-            <div class="section">
-                <h2>📈 Performance Heatmap</h2>
-                <img src="cid:heatmap" class="heatmap-img" alt="Stock Performance Heatmap">
-            </div>
+
+            <!-- Divider + CTA -->
+            <div class="divider"></div>
             <div class="footer">
-                This market brief was automatically generated on {now}.
+                🔒 For an in-depth market analysis, visit our 
+                <a href="https://rubenphagura-dash.streamlit.app" 
+                   class="cta-link" target="_blank">
+                   full dashboard
+                </a> (Password: <strong>yourpass</strong>)
             </div>
         </div>
     </body>
     </html>
     """
+
 
 
 # === SEND EMAIL ===
