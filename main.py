@@ -123,132 +123,136 @@ def get_stock_prices():
 
 # === BUILD EMAIL ===
 def compose_html_report(news, stocks):
-    styles = """
+        return f"""
+    <html>
+    <head>
         <style>
-            body {
-                font-family: Helvetica, Arial, sans-serif;
-                background-color: #f9fafb;
-                padding: 20px;
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                background-color: #f3f4f6;
                 margin: 0;
+                padding: 0;
                 color: #1f2937;
-            }
-            .container {
-                max-width: 600px;
+            }}
+            .container {{
+                max-width: 640px;
                 margin: 0 auto;
                 background-color: #ffffff;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 10px 15px rgba(0,0,0,0.05);
+            }}
+            .header {{
+                background-color: #1e40af;
+                color: white;
                 padding: 24px;
-            }
-            h2 {
-                color: #111827;
-                font-size: 24px;
-                margin-bottom: 16px;
                 text-align: center;
-            }
-            h3 {
-                color: #374151;
+            }}
+            .header h1 {{
+                margin: 0;
+                font-size: 24px;
+                font-weight: 600;
+            }}
+            .section {{
+                padding: 20px 24px;
+            }}
+            h2 {{
                 font-size: 18px;
-                margin: 16px 0 8px;
-            }
-            ul {
+                color: #111827;
+                margin: 0 0 12px;
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 6px;
+            }}
+            ul {{
                 list-style: none;
                 padding: 0;
-            }
-            li {
-                margin-bottom: 12px;
-                font-size: 16px;
-                line-height: 1.5;
-            }
-            a {
+                margin: 0;
+            }}
+            li {{
+                margin-bottom: 14px;
+                font-size: 15px;
+                line-height: 1.6;
+            }}
+            a {{
                 color: #2563eb;
                 text-decoration: none;
-            }
-            a:hover {
+            }}
+            a:hover {{
                 text-decoration: underline;
-            }
-            .positive {
+            }}
+            .positive {{
                 color: #16a34a;
                 font-weight: 600;
-            }
-            .negative {
+            }}
+            .negative {{
                 color: #dc2626;
                 font-weight: 600;
-            }
-            .neutral {
+            }}
+            .neutral {{
                 color: #d97706;
                 font-weight: 600;
-            }
-            .confidence {
-                font-size: 14px;
+            }}
+            .confidence {{
+                font-size: 13px;
                 color: #6b7280;
-                margin-left: 8px;
-            }
-            .divider {
-                border-top: 1px solid #e5e7eb;
-                margin: 16px 0;
-            }
-            .heatmap-img {
+                margin-left: 6px;
+            }}
+            .footer {{
+                text-align: center;
+                font-size: 12px;
+                color: #9ca3af;
+                padding: 16px;
+                background-color: #f9fafb;
+            }}
+            .heatmap-img {{
+                display: block;
                 max-width: 100%;
                 height: auto;
                 margin-top: 16px;
-                display: block;
-            }
-            @media only screen and (max-width: 600px) {
-                .container {
-                    padding: 16px;
-                }
-                h2 {
-                    font-size: 20px;
-                }
-                h3 {
-                    font-size: 16px;
-                }
-                li {
-                    font-size: 14px;
-                }
-            }
+                border-radius: 8px;
+            }}
         </style>
-    """
-
-    news_html = ""
-    for n in news:
-        emoji = {"positive": "📈", "neutral": "⚖️", "negative": "📉"}.get(n["sentiment"], "")
-        confidence_pct = round(n["confidence"] * 100, 1)
-        news_html += (
-            f"<li>{emoji} <a href='{n['url']}'>{n['title']}</a> "
-            f"<span class='{n['sentiment']}'>{n['sentiment'].capitalize()}</span>"
-            f"<span class='confidence'>({confidence_pct}%)</span></li>"
-        )
-
-    stocks_html = ""
-    for s in stocks:
-        color = "positive" if s["change"] > 0 else "negative"
-        emoji = "🔼" if s["change"] > 0 else "🔽"
-        stocks_html += (
-            f"<li>{s['ticker']}: ${s['price']} "
-            f"<span class='{color}'>{emoji} {s['change']}%</span></li>"
-        )
-
-    now = datetime.now().strftime("%A, %d %B %Y")
-
-    return f"""
-    <html>
-    <head>{styles}</head>
+    </head>
     <body>
         <div class="container">
-            <h2>📬 Morning Market Brief – {now}</h2>
-            <h3>📰 Top Finance Headlines</h3>
-            <ul>{news_html}</ul>
-            <div class="divider"></div>
-            <h3>📊 Stock Price Snapshot</h3>
-            <ul>{stocks_html}</ul>
-            <h3>📈 Performance Heatmap</h3>
-            <img src="cid:heatmap" class="heatmap-img" alt="Stock Performance Heatmap">
+            <div class="header">
+                <h1>📬 Morning Market Brief – {now}</h1>
+            </div>
+            <div class="section">
+                <h2>📰 Top Finance Headlines</h2>
+                <ul>
+                    {''.join(
+                        f"<li>{'📈' if n['sentiment']=='positive' else '📉' if n['sentiment']=='negative' else '⚖️'} "
+                        f"<a href='{n['url']}'>{n['title']}</a> "
+                        f"<span class='{n['sentiment']}'>{n['sentiment'].capitalize()}</span>"
+                        f"<span class='confidence'>({round(n['confidence']*100, 1)}%)</span></li>"
+                        for n in news
+                    )}
+                </ul>
+            </div>
+            <div class="section">
+                <h2>📊 Stock Price Snapshot</h2>
+                <ul>
+                    {''.join(
+                        f"<li>{s['ticker']}: ${s['price']} "
+                        f"<span class='{'positive' if s['change'] > 0 else 'negative'}'>"
+                        f"{'🔼' if s['change'] > 0 else '🔽'} {s['change']}%</span></li>"
+                        for s in stocks
+                    )}
+                </ul>
+            </div>
+            <div class="section">
+                <h2>📈 Performance Heatmap</h2>
+                <img src="cid:heatmap" class="heatmap-img" alt="Stock Performance Heatmap">
+            </div>
+            <div class="footer">
+                This market brief was automatically generated on {now}.
+            </div>
         </div>
     </body>
     </html>
     """
+
 
 # === SEND EMAIL ===
 def send_email(subject, html_body):
