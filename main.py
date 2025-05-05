@@ -21,17 +21,19 @@ def ai(news):
             {
                 "role": "user",
                 "content": (
-                    f"return just one word for this output for finantial sentiment analysis "
-                    f"don't say anything else only positive neutral or negative. "
-                    f"this is the news to do sentiment analysis on: {news}"
+                    "return just one word for this output for financial sentiment analysis. "
+                    "Don't say anything else, only return: positive, neutral, or negative. "
+                    f"This is the news: {news}"
                 ),
             }
         ],
-        model="llama-3.3-70b-versatile",
+        model="llama-3-70b-8192",
         stream=False,
     )
-    result = chat_completion.choices[0].message.content.strip().lower()
-    return result
+    sentiment = chat_completion.choices[0].message.content.strip().lower()
+    confidence = 1.0  # You can make this smarter later
+    return sentiment, confidence
+
 
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
