@@ -5,7 +5,7 @@ import yfinance as yf
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
-from newspaper import Article
+
 from groq import Groq
 
 # === ENVIRONMENT VARIABLES ===
@@ -21,10 +21,9 @@ def ai(news):
             {
                 "role": "user",
                 "content": (
-                    "You are a financial sentiment analysis model. "
-                    "Read the following article and respond with only one word: "
-                    "`positive`, `neutral`, or `negative`. Do not explain. \n\n"
-                    f"ARTICLE:\n{news}"
+                    f"return just one word for this output for finantial sentiment analysis "
+                    f"don't say anything else only positive neutral or negative. "
+                    f"this is the news to do sentiment analysis on: {news}"
                 ),
             }
         ],
@@ -33,7 +32,6 @@ def ai(news):
     )
     result = chat_completion.choices[0].message.content.strip().lower()
     return result
-
 
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
@@ -49,21 +47,12 @@ def get_finance_news():
         articles = res.json().get("articles", [])[:5]
         results = []
         for a in articles:
-            title = a['title']
-            article_url = a['url']
-            try:
-                article = Article(article_url)
-                article.download()
-                article.parse()
-                full_text = article.text
-            except Exception as scrape_err:
-                print(f"Warning: couldn't scrape full article for '{title}': {scrape_err}")
-                full_text = title  # fallback to title
-
+            # Combine title, description, and content for better sentiment input
+            full_text = f"{a.get('title', '')}. {a.get('description', '')}. {a.get('content', '')}"
             sentiment, confidence = ai(full_text)
             results.append({
-                "title": title,
-                "url": article_url,
+                "title": a.get("title", "No Title"),
+                "url": a.get("url", "#"),
                 "sentiment": sentiment,
                 "confidence": confidence
             })

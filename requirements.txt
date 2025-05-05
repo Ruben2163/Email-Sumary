@@ -1,7 +1,5 @@
 yfinance
 requests
-seaborn
+seaborn 
 matplotlib
 groq
-newspaper3k
-lxml[html_clean]
