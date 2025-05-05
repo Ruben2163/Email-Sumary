@@ -12,10 +12,10 @@ from groq import Groq
 # === ENVIRONMENT VARIABLES ===
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-API_KEY = Groq(api_key=os.getenv("GROQ_API_KEY"),)
+client = Groq(api_key=os.getenv("GROQ_API_KEY"),)
 
 def ai(news):
-    chat_completion = API_KEY.chat.completions.create(
+    chat_completion = client.chat.completions.create(
         messages=[
             {
                 "role": "user",
