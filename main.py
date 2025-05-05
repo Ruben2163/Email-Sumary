@@ -6,11 +6,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from datetime import datetime
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
-import torch.nn.functional as F
-import seaborn as sns
-import matplotlib.pyplot as plt
 import pandas as pd
 from groq import Groq
 
