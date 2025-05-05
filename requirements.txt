@@ -4,3 +4,4 @@ seaborn
 matplotlib
 groq
 newspaper3k
+lxml[html_clean]
