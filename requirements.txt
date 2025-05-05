@@ -1,6 +1,6 @@
 yfinance
 requests
-seaborn 
+seaborn
 matplotlib
 groq
-newspaper
+newspaper3k
