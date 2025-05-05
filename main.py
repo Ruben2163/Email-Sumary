@@ -15,25 +15,23 @@ client = Groq(
     api_key=os.getenv("GROQ_API_KEY"),
 )
 
-def ai(news):
+def ai(title, content):
     chat_completion = client.chat.completions.create(
         messages=[
             {
                 "role": "user",
                 "content": (
-                    "return just one word for this output for financial sentiment analysis. "
-                    "Don't say anything else, only return: positive, neutral, or negative. "
-                    f"This is the news: {news}"
+                    f"return just one word for this output for finantial sentiment analysis "
+                    f"don't say anything else only positive neutral or negative. "
+                    f"this is the news to do sentiment analysis on: {title}:title, {content}:content"
                 ),
             }
         ],
-        model="llama-3-70b-8192",
+        model="llama-3.3-70b-versatile",
         stream=False,
     )
-    sentiment = chat_completion.choices[0].message.content.strip().lower()
-    confidence = 1.0  # You can make this smarter later
-    return sentiment, confidence
-
+    result = chat_completion.choices[0].message.content.strip().lower()
+    return result
 
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
@@ -49,21 +47,19 @@ def get_finance_news():
         articles = res.json().get("articles", [])[:5]
         results = []
         for a in articles:
-            # Combine title, description, and content for better sentiment input
-            full_text = f"{a.get('title', '')}. {a.get('description', '')}. {a.get('content', '')}"
-            sentiment, confidence = ai(full_text)
+            title = a['title']
+            content = a['content']
+            sentiment, confidence = ai(title, content)
             results.append({
-                "title": a.get("title", "No Title"),
-                "url": a.get("url", "#"),
+                "title": title,
+                "url": a['url'],
                 "sentiment": sentiment,
-                "confidence": confidence
             })
-        print("retrieved news")
+        print("retrived news")
         return results
     except Exception as e:
         print("Error fetching news:", e)
         return []
-
 
 # === FETCH STOCK PRICES AND GENERATE HEATMAP ===
 def get_stock_prices():
