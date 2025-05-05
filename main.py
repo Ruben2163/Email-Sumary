@@ -49,7 +49,7 @@ def get_finance_news():
         for a in articles:
             title = a['title']
             content = a['content']
-            sentiment, confidence = ai(title, content)
+            sentiment = ai(title, content)
             results.append({
                 "title": title,
                 "url": a['url'],
