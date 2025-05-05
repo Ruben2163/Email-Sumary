@@ -34,8 +34,6 @@ def ai(news):
     confidence = 1.0  # Placeholder confidence
     return result, confidence
 
-
-print(chat_completion.choices[0].message.content)
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
 TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA,BTC-GBP,TSM,AMD,META,BRK-B").split(",")
