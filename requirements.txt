@@ -2,5 +2,4 @@ yfinance
 requests
 seaborn 
 matplotlib
-pandas 
 groq

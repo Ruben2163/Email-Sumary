@@ -4,9 +4,8 @@ import smtplib
 import yfinance as yf
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.image import MIMEImage
 from datetime import datetime
-import pandas as pd
+
 from groq import Groq
 
 # === ENVIRONMENT VARIABLES ===
@@ -21,13 +20,20 @@ def ai(news):
         messages=[
             {
                 "role": "user",
-                "content": (f"return just one word for this output for finantial sentiment analysis dont says anything else only positive neutral or negitive. this is the news to do sentiment analysis on {news}"),
+                "content": (
+                    f"return just one word for this output for finantial sentiment analysis "
+                    f"don't say anything else only positive neutral or negative. "
+                    f"this is the news to do sentiment analysis on: {news}"
+                ),
             }
         ],
         model="llama-3.3-70b-versatile",
         stream=False,
     )
-    print(chat_completion.choices[0].message.content)
+    result = chat_completion.choices[0].message.content.strip().lower()
+    confidence = 1.0  # Placeholder confidence
+    return result, confidence
+
 
 print(chat_completion.choices[0].message.content)
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
