@@ -12,7 +12,9 @@ from groq import Groq
 # === ENVIRONMENT VARIABLES ===
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-client = Groq(api_key=os.getenv("GROQ_API_KEY"),)
+client = Groq(
+    api_key=os.environ.get("GROQ_API_KEY"),
+)
 
 def ai(news):
     chat_completion = client.chat.completions.create(
