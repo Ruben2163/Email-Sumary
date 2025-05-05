@@ -12,67 +12,31 @@ import torch.nn.functional as F
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
+from groq import Groq
 
 # === ENVIRONMENT VARIABLES ===
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+API_KEY = Groq(api_key=os.getenv("GROQ_API_KEY"),)
+
+def ai(news):
+    chat_completion = API_KEY.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": (f"return just one word for this output for finantial sentiment analysis dont says anything else only positive neutral or negitive. this is the news to do sentiment analysis on {news}"),
+            }
+        ],
+        model="llama-3.3-70b-versatile",
+        stream=False,
+    )
+    print(chat_completion.choices[0].message.content)
+
+print(chat_completion.choices[0].message.content)
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
 TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA,BTC-GBP,TSM,AMD,META,BRK-B").split(",")
 
-# === LOAD FINBERT ===
-tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
-model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
-labels = ['negative', 'neutral', 'positive']
-
-def analyze_sentiment(text):
-    # Negative keywords for rule-based correction
-    negative_keywords = ['drop', 'plunge', 'crash', 'fall', 'decline', 'slump', 'lose', 'loss',
-    "debt",
-    "bankruptcy",
-    "default",
-    "layoff",
-    "recession",
-    "collapse",
-    "crisis",
-    "downgrade",
-    "deficit",
-    "fraud",
-    "lawsuit",
-    "shortfall",
-    "volatility",
-    "instability",
-    "liabilities",
-    "inflation",
-    "stagnation",
-    "risk",
-    "exposure",
-    "write-down",
-    "impairment",
-    "insolvency",
-    "underperformance",
-    "bear market",
-    "sell-off",
-    "credit crunch"]
-    
-    inputs = tokenizer(text, return_tensors="pt", truncation=True)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    probs = F.softmax(outputs.logits, dim=-1)
-    sentiment_idx = torch.argmax(probs)
-    sentiment = labels[sentiment_idx]
-    confidence = torch.max(probs).item()
-
-    # Rule-based correction for negative headlines mislabeled as neutral
-    if sentiment == 'neutral' and confidence > 0.9:
-        for keyword in negative_keywords:
-            if keyword in text.lower():
-                sentiment = 'negative'
-                confidence = 0.95  # Adjust confidence to reflect correction
-                break
-
-    print("sentiment analyze done")
-    return sentiment, confidence
 
 # === FETCH NEWS ===
 def get_finance_news():
@@ -84,7 +48,7 @@ def get_finance_news():
         results = []
         for a in articles:
             title = a['title']
-            sentiment, confidence = analyze_sentiment(title)
+            sentiment, confidence = ai(title)
             results.append({
                 "title": title,
                 "url": a['url'],
