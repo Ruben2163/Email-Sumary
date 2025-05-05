@@ -19,7 +19,7 @@ def ai_sum(content):
             {
                 "role": "user",
                 "content": (
-                    f"take in this content for news {content} and give me a short 100-200 word sumary"),
+                    f"take in this content for news {content} and give me a short 100-200 word sumary make sure if it is about world news you do not include drama in celbraties but wars and other non people news unless it is important"),
             }
         ],
         model="llama-3.3-70b-versatile",
@@ -131,6 +131,7 @@ def get_stock_prices():
 
 # === BUILD EMAIL ===
 # === BUILD EMAIL ===
+# === BUILD EMAIL ===
 def compose_html_report(news, stocks, finance_summary, world_summary):
     now = datetime.now().strftime("%A, %d %B %Y")
     
@@ -221,12 +222,12 @@ def compose_html_report(news, stocks, finance_summary, world_summary):
         .cta-link:hover {{
             text-decoration: underline;
         }}
-        .world-summary {{
+        .summary {{
             font-size: 16px;
             color: #1f2937;
             line-height: 1.6;
             padding: 12px;
-            background-color: #eef2ff;
+            background-color: #f9fafb;
             border-left: 4px solid #4f46e5;
             margin: 0 24px 24px;
         }}
@@ -271,7 +272,7 @@ def compose_html_report(news, stocks, finance_summary, world_summary):
         <!-- World News Summary -->
         <div class="section">
             <h2>🌍 World News Summary</h2>
-            <div class="world-summary">
+            <div class="summary">
                 {world_summary}
             </div>
         </div>
@@ -314,7 +315,8 @@ def send_email(subject, html_body):
 
 # === MAIN ===
 if __name__ == "__main__":
+    wnews = get_world_news()
     news, content = get_finance_news()
     stocks = get_stock_prices()
-    html = compose_html_report(news, stocks, content)
+    html = compose_html_report(news, stocks, content, wnews)
     send_email("📈 Your Morning Market Brief", html)
