@@ -5,7 +5,7 @@ import yfinance as yf
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
-
+from newspaper import Article
 from groq import Groq
 
 # === ENVIRONMENT VARIABLES ===
@@ -21,9 +21,10 @@ def ai(news):
             {
                 "role": "user",
                 "content": (
-                    f"return just one word for this output for finantial sentiment analysis "
-                    f"don't say anything else only positive neutral or negative. "
-                    f"this is the news to do sentiment analysis on: {news}"
+                    "You are a financial sentiment analysis model. "
+                    "Read the following article and respond with only one word: "
+                    "`positive`, `neutral`, or `negative`. Do not explain. \n\n"
+                    f"ARTICLE:\n{news}"
                 ),
             }
         ],
@@ -31,8 +32,8 @@ def ai(news):
         stream=False,
     )
     result = chat_completion.choices[0].message.content.strip().lower()
-    confidence = 1.0  # Placeholder confidence
-    return result, confidence
+    return result
+
 
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
@@ -49,18 +50,29 @@ def get_finance_news():
         results = []
         for a in articles:
             title = a['title']
-            sentiment, confidence = ai(title)
+            article_url = a['url']
+            try:
+                article = Article(article_url)
+                article.download()
+                article.parse()
+                full_text = article.text
+            except Exception as scrape_err:
+                print(f"Warning: couldn't scrape full article for '{title}': {scrape_err}")
+                full_text = title  # fallback to title
+
+            sentiment, confidence = ai(full_text)
             results.append({
                 "title": title,
-                "url": a['url'],
+                "url": article_url,
                 "sentiment": sentiment,
                 "confidence": confidence
             })
-        print("retrived news")
+        print("retrieved news")
         return results
     except Exception as e:
         print("Error fetching news:", e)
         return []
+
 
 # === FETCH STOCK PRICES AND GENERATE HEATMAP ===
 def get_stock_prices():

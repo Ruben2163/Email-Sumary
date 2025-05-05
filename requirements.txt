@@ -3,3 +3,4 @@ requests
 seaborn 
 matplotlib
 groq
+newspaper
