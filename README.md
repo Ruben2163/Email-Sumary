@@ -1,1 +1,1 @@
-# Daily-Sum
+# Daily-Sums
