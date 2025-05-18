@@ -89,21 +89,20 @@ def get_finance_news():
         results = []
         all_content = ""
         for a in articles:
-            title = a['title']
-            content = a['content']
+            title = a.get('title') or ""
+            content = a.get('content') or ""
             sentiment = ai(title, content)
-            all_content += title
-            all_content += content
+            all_content += title + " " + content + " "
             results.append({
                 "title": title,
-                "url": a['url'],
+                "url": a.get('url', '#'),
                 "sentiment": sentiment,
             })
-        print("retrived news")
+        print("retrieved news")
         return results, ai_sum(all_content)
     except Exception as e:
         print("Error fetching news:", e)
-        return []
+        return [], "Unable to fetch finance news at this time."
 
 # === FETCH STOCK PRICES AND GENERATE HEATMAP ===
 def get_stock_prices():
