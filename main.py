@@ -48,7 +48,7 @@ def ai(title, content):
 
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL")
-TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA,BTC-GBP,TSM,AMD,META,BRK-B").split(",")
+TICKERS = os.getenv("TICKERS", "AAPL,MSFT,GOOG,TSLA,NVDA,BTC-GBP,TSM,AMD,META,BRK-B").split(",")
 
 # === FETCH WORLD NEWS ===
 def get_world_news():
